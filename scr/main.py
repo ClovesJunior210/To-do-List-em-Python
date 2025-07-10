@@ -10,7 +10,8 @@ def sqlite_defaults():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS tarefas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        descricao TEXT NOT NULL
+        descricao TEXT NOT NULL,
+        concluida INTEGER NOT NULL DEFAULT 0
     )
     """)
     conn.commit()
@@ -43,7 +44,7 @@ def add_window_gui():
     add_window.grab_set()
 
 def window_gui():
-    global main_window
+    global main_window, task_frame
     main_window = ctk.CTk()
     main_window.title("To-Do List")
     main_window.configure(fg_color="#1e1e1e")
@@ -57,6 +58,11 @@ def window_gui():
     add_function_button = ctk.CTkButton(main_window, text="+", width=20, height=20, corner_radius=20, fg_color="#00A2FF", hover_color="#008CDD", text_color="#1e1e1e", font=("Segoe UI", 18, "bold"), command=open_add_window)
     add_function_button.place(x=270, y=20)
 
+    task_frame = ctk.CTkScrollableFrame(main_window, fg_color="#2e2e2e", width=290, height=330)
+    task_frame.place(x=20, y=70)
+
+    show_tasks()
+
     main_window.mainloop()
 
 def insert_task_to_db(title, description, window):
@@ -66,11 +72,62 @@ def insert_task_to_db(title, description, window):
         return
     conn = sqlite3.connect("tarefas.db")
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO tarefas (descricao) VALUES (?)", (f"{title}: {description}",))
+    cursor.execute("INSERT INTO tarefas (descricao) VALUES (?)", (f"{title}:  {description}",))
     conn.commit()
     conn.close()
     logging.info(f'TASK ADDED task: {title}')
+    show_tasks()
     window.destroy()
+
+def fetch_all_tasks():
+    conn = sqlite3.connect("tarefas.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, descricao, concluida FROM tarefas")
+    tasks = cursor.fetchall()  
+    conn.close()
+    return tasks
+
+def show_tasks():
+    for widget in task_frame.winfo_children():
+        widget.destroy()
+    
+    tasks = fetch_all_tasks()
+
+    y_pos = 10
+
+    for task_id, descricao, concluida in tasks:
+
+        var = ctk.BooleanVar(value=bool(concluida))  
+        text_color = "#808080" if var.get() else "#ffffff"
+
+        check = ctk.CTkCheckBox(task_frame, text=descricao, font=("Segoe UI", 14), text_color=f"{text_color}", variable=var, onvalue=True, offvalue=False, command=lambda v=var, id=task_id: on_check(v, id))
+        check.place(x=10, y=y_pos)
+
+        button_delete_task = ctk.CTkButton(task_frame, text="❌", fg_color="#2e2e2e", hover_color="#3a3a3a", text_color="#a70000", font=("Segoe UI", 16, "bold"), width=30, height=30, corner_radius=5, command=lambda id=task_id: delete_task(id))
+        button_delete_task.place(x=250 , y=y_pos)
+        y_pos += 40
+
+    logging.info('Tasks shown')
+    
+
+def on_check(var, task_id):
+    estado = var.get()
+    conn = sqlite3.connect("tarefas.db")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE tarefas SET concluida = ? WHERE id = ?", (int(estado), task_id))
+    conn.commit()
+    conn.close()
+    logging.info(f"Tarefa {task_id} atualizada para concluída = {estado}")
+    show_tasks()
+
+def delete_task(task_id):
+    conn = sqlite3.connect("tarefas.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM tarefas WHERE id = ?", (task_id,))
+    conn.commit()
+    conn.close()
+    logging.info(f'Tarefa {task_id} deletada')
+    show_tasks()
 
 sqlite_defaults()
 window_gui()
